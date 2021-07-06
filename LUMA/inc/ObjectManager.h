@@ -139,23 +139,24 @@ public:
 	static ObjectManager *getInstance(GridObj* g);	///< Overloaded get instance passing in pointer to grid hierarchy
 
 	// IBM methods //
-	void ibm_apply(GridObj *g, bool doSubIterate);									// Apply interpolate, compute and spread operations for all bodies.
-	void ibm_initialise();															// Initialise a built immersed body with support.
-	double ibm_deltaKernel(double rad, double dilation);							// Evaluate kernel (delta function approximation).
-	void ibm_interpolate(int level);												// Interpolation of velocity field onto markers of ib-th body.
-	void ibm_spread(int level);														// Spreading of restoring force from ib-th body.
-	void ibm_updateMacroscopic(int level);											// Update the macroscopic values with the IBM force
-	void ibm_findSupport(int ib);													// Populates support information for the m-th marker of ib-th body.
+	void ibm_apply(GridObj *g, bool doSubIterate);	// Apply interpolate, compute and spread operations for all bodies.
+	void ibm_initialise();					// Initialise a built immersed body with support.
+	double ibm_deltaKernel(double rad, double dilation);	// Evaluate kernel (delta function approximation).
+	void ibm_interpolate(int level);			// Interpolation of velocity field onto markers of ib-th body.
+	void ibm_spread(int level);				// Spreading of restoring force from ib-th body.
+	void ibm_updateMacroscopic(int level);		// Update the macroscopic values with the IBM force
+	void ibm_findSupport(int ib);				// Populates support information for the m-th marker of ib-th body.
 	void ibm_initialiseSupport(int ib, int m, std::vector<double> &estimated_position);	// Initialises data associated with the support points.
-	void ibm_computeForce(int level);												// Compute restorative force at each marker in ib-th body.
-	void ibm_findEpsilon(int level);												// Method to find epsilon weighting parameter for ib-th body.
+	void ibm_computeForce(int level);			// Compute restorative force at each marker in ib-th body.
+	void ibm_findEpsilon(int level);			// Method to find epsilon weighting parameter for ib-th body.
 	void ibm_computeDs(int level);
-	void ibm_moveBodies(int level);													// Update all IBBody positions and support.
-	void ibm_finaliseReadIn(int iBodyID);											// Do some house-keeping after geometry read in
-	void ibm_universalEpsilonGather(int level, IBBody &iBodyTmp);					// Gather all the markers into the temporary iBody vector
-	void ibm_universalEpsilonScatter(int level, IBBody &iBodyTmp);					// Gather all the markers into the temporary iBody vector
-	void ibm_subIterate(GridObj *g);												// Subiterate to enforce correct kinematic conditions at interface
-	double ibm_checkVelDiff(int level);												// Check residual from sub-iteration step
+	void ibm_moveBodies(int level, int t);		// Update all IBBody positions and support.
+	void ibm_finaliseReadIn(int iBodyID);			// Do some house-keeping after geometry read in
+	void ibm_universalEpsilonGather(int level, IBBody &iBodyTmp);		// Gather all the markers into the temporary iBody vector
+	void ibm_universalEpsilonScatter(int level, IBBody &iBodyTmp);		// Gather all the markers into the temporary iBody vector
+	void ibm_subIterate(GridObj *g);					// Subiterate to enforce correct kinematic conditions at interface
+	double ibm_checkVelDiff(int level);					// Check residual from sub-iteration step
+	void ibm_apply_prescribed_movement(int timeinstant);			//gives prescribed motion to the body
 
 	// IBM Debug methods //
 	void ibm_debug_epsilon(int ib);

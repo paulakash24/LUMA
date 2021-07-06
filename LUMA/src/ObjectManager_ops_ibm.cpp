@@ -23,8 +23,9 @@
 #include "../inc/stdafx.h"
 #include "../inc/GridObj.h"
 #include "../inc/ObjectManager.h"
+#include <string>
 
-
+using namespace std;
 // *****************************************************************************
 ///	\brief	Perform the IBM step
 ///
@@ -34,7 +35,7 @@ void ObjectManager::ibm_apply(GridObj *g, bool doSubIterate) {
 
 	// Interpolate the velocity onto the markers
 	ibm_interpolate(g->level);
-	
+
 	// Compute force
 	ibm_computeForce(g->level);
 
@@ -45,12 +46,13 @@ void ObjectManager::ibm_apply(GridObj *g, bool doSubIterate) {
 	ibm_updateMacroscopic(g->level);
 
 	// Perform FEM
-	if (hasFlexibleBodies[g->level])
-		ibm_moveBodies(g->level);
+	// if (hasFlexibleBodies[g->level])
+	// 	ibm_moveBodies(g->level);
+	ibm_moveBodies(g->level, g->t);
 
 	// Do subiteration step to enforce kinematic condition at interface
-	if (doSubIterate == true && hasFlexibleBodies[g->level])
-		ibm_subIterate(g);
+	// if (doSubIterate == true && hasFlexibleBodies[g->level])
+	// 	ibm_subIterate(g);
 }
 
 
@@ -58,8 +60,7 @@ void ObjectManager::ibm_apply(GridObj *g, bool doSubIterate) {
 ///	\brief	Moves iBodies after applying IBM
 ///
 ///	\param	level		current grid level
-void ObjectManager::ibm_moveBodies(int level) {
-
+void ObjectManager::ibm_moveBodies(int level, int t) {
 
 #ifdef L_BUILD_FOR_MPI
 
@@ -77,6 +78,9 @@ void ObjectManager::ibm_moveBodies(int level) {
 		if (iBody[ib]._Owner->level == level)
 			iBody[ib].fBody->dynamicFEM();
 	}
+
+	// Prescribed motion (method in OjectManager_ops_ibm.cpp (this file))
+	ibm_apply_prescribed_movement(t);
 
 	// Update IBM markers
 #ifdef L_BUILD_FOR_MPI
@@ -102,9 +106,98 @@ void ObjectManager::ibm_moveBodies(int level) {
 	// Find epsilon for the body
 	ibm_findEpsilon(level);
 }
-
-
 // *****************************************************************************
+///	\brief	Applies a pitching motion to the IB body
+///
+///	\param	timeinstant			current time instant
+// *****************************************************************************
+
+// This functions is giving pitching motion to a filament specifically
+void ObjectManager::ibm_apply_prescribed_movement(int timeinstant){
+
+	double actual_time = timeinstant/2000.0; // dimensional time
+	string kinematics = "pitching";
+
+	if (kinematics == "pitching"){
+
+		double omega = 8; // angular frequency in radian per second
+		double amplitude = 10; // in degrees
+		double amp_radian = amplitude * (3.14159265359/180); // amplitude in radian
+		double instant_angle = (amp_radian * sin(omega * actual_time)); // theta(t) = theta_max*sin(2*pi*f*t)
+
+		for (size_t ib = 0; ib < iBody.size(); ib++) { // looping through each body
+
+			// setting the pivot position: postion of the 1st marker
+			double x_pivot = iBody[ib].markers[0].position0[0];
+			double y_pivot = iBody[ib].markers[0].position0[1];
+
+			for (size_t i = 0; i < iBody[ib].markers.size(); i++) { // looping through each marker
+
+				#if (L_DIMS == 2)
+					// getting the x,y co-ordinates if its 2D
+					double x_pos = iBody[ib].markers[i].position0[0];
+					double y_pos = iBody[ib].markers[i].position0[1];
+				#endif
+
+				// calculating the new position of a marker by rotating the point about the pivot pitching point
+				double new_x_pos = (x_pos-x_pivot)*cos(instant_angle) - (y_pos-y_pivot)*sin(instant_angle) + x_pivot;
+				double new_y_pos = (x_pos-x_pivot)*sin(instant_angle) + (y_pos-y_pivot)*cos(instant_angle) + y_pivot;
+
+				// updating marker position
+				iBody[ib].markers[i].position[0] = new_x_pos;
+				iBody[ib].markers[i].position[1] = new_y_pos;
+
+				// calculating r
+				double r = sqrt(pow((new_x_pos - x_pivot),2) + pow((new_y_pos - y_pivot),2));
+
+				// calculating u and v of a marker
+				double new_u = -amp_radian*r*omega*sin(instant_angle)*cos(omega*actual_time);
+				double new_v = +amp_radian*r*omega*cos(instant_angle)*cos(omega*actual_time);
+
+				//updating marker velocities
+				iBody[ib].markers[i].markerVel[0] = new_u * iBody[ib]._Owner->dt / iBody[ib]._Owner->dh;
+				iBody[ib].markers[i].markerVel[1] = new_v * iBody[ib]._Owner->dt / iBody[ib]._Owner->dh;
+			}
+		}
+	}
+	else if (kinematics == "heaving"){
+
+		double omega = 8; // angular frequency in radian per second
+		double max_plunge_height = 0.1; // in m
+		double instant_height = (max_plunge_height * sin(omega * actual_time)); // h(t) = h_max*sin(2*pi*f*t)
+
+		for (size_t ib = 0; ib < iBody.size(); ib++) { // looping through each body
+
+			// setting the mean position: y postion of the 1st marker
+			double mean_height = iBody[ib].markers[0].position0[1];
+
+			for (size_t i = 0; i < iBody[ib].markers.size(); i++) { // looping through each marker
+
+				#if (L_DIMS == 2)
+					// getting the x,y co-ordinates if its 2D
+					double x_pos = iBody[ib].markers[i].position[0];
+				#endif
+
+				// calculating the new position of a marker
+				double new_x_pos = x_pos;
+				double new_y_pos = mean_height + instant_height;
+
+				// updating marker position
+				iBody[ib].markers[i].position[0] = new_x_pos;
+				iBody[ib].markers[i].position[1] = new_y_pos;
+
+				// calculating u and v of a marker
+				double new_u = iBody[ib].markers[i].markerVel[0];
+				double new_v = max_plunge_height*omega*cos(omega*actual_time);
+
+				iBody[ib].markers[i].markerVel[0] = new_u * iBody[ib]._Owner->dt / iBody[ib]._Owner->dh;
+				iBody[ib].markers[i].markerVel[1] = new_v * iBody[ib]._Owner->dt / iBody[ib]._Owner->dh;
+			}
+		}
+	}
+
+}
+
 ///	\brief	Do sub-iteration to enforce correct kinematic condition at interface
 ///
 ///	\param	g		pointer to current grid
@@ -277,7 +370,7 @@ double ObjectManager::ibm_deltaKernel(double radius, double dilation) {
 ///
 ///	\param	ib			body index
 void ObjectManager::ibm_findSupport(int ib) {
-	
+
 #ifdef L_BUILD_FOR_MPI
 	MpiManager *mpim = MpiManager::getInstance();
 	int estimated_rank_offset[3] = { 0, 0, 0 };
@@ -486,7 +579,7 @@ void ObjectManager::ibm_initialiseSupport(int ib, int m, std::vector<double> &es
 	iBody[ib].markers[m].deltaval.push_back(delta_x * delta_y
 #if (L_DIMS == 3)
 		* delta_z
-#endif	
+#endif
 		);
 }
 
